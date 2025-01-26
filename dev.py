@@ -4,6 +4,8 @@ import geopandas as gpd
 from shapely.geometry import Point
 import folium
 from folium.plugins import MarkerCluster
+from geopy.distance import geodesic
+import html_template as htm
 
 # 1. Wczytaj dane z folderu data
 rent_data = pd.read_csv('data/apartments_rent_pl_2023_11.csv')
@@ -41,37 +43,50 @@ job_gdf = gpd.GeoDataFrame(
 city_coordinates = {
     "Warszawa": [52.2297, 21.0122],
     "Katowice": [50.2599, 19.0216],
-    "Wrocław": [51.1079, 17.0385],
-    "Kraków": [50.0647, 19.9450],
+    "Wroclaw": [51.1079, 17.0385],
+    "Karkow": [50.0647, 19.9450],
 }
 
 
-# Funkcja do generowania mapy dla danego miasta
-def generate_city_map(city_name, city_coords, rent_gdf, job_gdf):
-    city_map = folium.Map(location=city_coords, zoom_start=12,
-                          tiles="CartoDB Positron")
+# Funkcja do filtrowania danych na podstawie odległości
+# od współrzędnych miasta
+def filter_data_within_city(data_gdf, city_coords, radius_km=10):
+    filtered_data = []
+    for _, row in data_gdf.iterrows():
+        point_coords = (row.geometry.y, row.geometry.x)
+        if geodesic(point_coords, city_coords).km <= radius_km:
+            filtered_data.append(row)
+    return filtered_data
 
+
+# Funkcja do generowania mapy dla danego miasta
+def generate_city_map(city_name, city_coords, rent_gdf,
+                      job_gdf, radius_km=10):
+    city_map = folium.Map(location=city_coords,
+                          zoom_start=12, tiles="CartoDB Positron")
+
+    # Filtruj mieszkania w obrębie miasta
+    rent_filtered = filter_data_within_city(rent_gdf, city_coords, radius_km)
     rent_markers = MarkerCluster(name="Mieszkania").add_to(city_map)
-    for _, row in rent_gdf[
-        rent_gdf['city'].str.lower() == city_name.lower()].iterrows():
+    for row in rent_filtered:
         folium.Marker(
             location=[row.geometry.y, row.geometry.x],
             popup=(
-                f"<b>Miasto:</b> {row['city']}<br>"
+                f"<b>Miasto:</b> {city_name}<br>"
                 f"<b>Cena:</b> {row['price']} PLN<br>"
                 f"<b>Metraż:</b> {row['squareMeters']} m²"
             ),
             icon=folium.Icon(color="blue", icon="home", prefix="fa"),
         ).add_to(rent_markers)
 
-    # Grupa znaczników dla ofert pracy
+    # Filtruj oferty pracy w obrębie miasta
+    job_filtered = filter_data_within_city(job_gdf, city_coords, radius_km)
     job_markers = MarkerCluster(name="Oferty pracy").add_to(city_map)
-    for _, row in job_gdf[
-        job_gdf['city'].str.lower() == city_name.lower()].iterrows():
+    for row in job_filtered:
         folium.Marker(
             location=[row.geometry.y, row.geometry.x],
             popup=(
-                f"<b>Miasto:</b> {row['city']}<br>"
+                f"<b>Miasto:</b> {city_name}<br>"
                 f"<b>Stanowisko:</b> {row['title']}<br>"
             ),
             icon=folium.Icon(color="green", icon="briefcase", prefix="fa"),
@@ -79,7 +94,7 @@ def generate_city_map(city_name, city_coords, rent_gdf, job_gdf):
 
     folium.LayerControl(collapsed=False).add_to(city_map)
 
-    file_name = "output/{}_map.html".format(city_name.lower())
+    file_name = f"output/{city_name.lower()}_map.html"
     city_map.save(file_name)
     return file_name
 
@@ -87,46 +102,25 @@ def generate_city_map(city_name, city_coords, rent_gdf, job_gdf):
 # Generowanie map dla każdego miasta
 map_files = []
 for city_name, city_coords in city_coordinates.items():
-    map_file = generate_city_map(city_name, city_coords, rent_gdf, job_gdf)
+    map_file = generate_city_map(city_name, city_coords,
+                                 rent_gdf, job_gdf, radius_km=10)
     map_files.append((city_name, map_file))
-print(len(map_files))
-# Tworzenie strony HTML z czterema mapami
-html_content = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Mapy Miast</title>
-    <style>
-        .map-container {{
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            padding: 20px;
-        }}
-        iframe {{
-            width: 100%;
-            height: 500px;
-            border: none;
-        }}
-    </style>
-</head>
-<body>
-    <h1>Mapy Miast: Warszawa, Wroclaw, Krakow, Katowice</h1>
-    <div class="map-container">
-        {map_iframes}
-    </div>
-</body>
-</html>
-"""
+# Tworzenie poprawionego HTML
+html_content = htm.html_content
 
-# Tworzenie iframe dla każdej mapy
-map_iframes = ""
+# Tworzenie sekcji dla każdej mapy
+map_sections = ""
 for city_name, map_file in map_files:
-    map_iframes += f'<iframe src="{map_file}" title="Mapa: {city_name}"></iframe>\n'
+    map_sections += f"""
+    <div class="city-map">
+        <h2>{city_name}</h2>
+        <iframe src="{map_file}" title="Mapa: {city_name}"></iframe>
+    </div>
+    """
 
-# Wypełnienie szablonu iframe'ami
-final_html = html_content.format(map_iframes=map_iframes)
+# Wypełnienie szablonu sekcjami map
+final_html = html_content.format(map_sections=map_sections)
 
-
+# Zapis do pliku HTML
 with open("miasta_mapy.html", "w", encoding="utf-8") as f:
     f.write(final_html)
