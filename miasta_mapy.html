@@ -1,0 +1,30 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapy Miast</title>
+    <style>
+        .map-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        iframe {
+            width: 100%;
+            height: 500px;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mapy Miast: Warszawa, Wroclaw, Krakow, Katowice</h1>
+    <div class="map-container">
+        <iframe src="output/warszawa_map.html" title="Mapa: Warszawa"></iframe>
+<iframe src="output/katowice_map.html" title="Mapa: Katowice"></iframe>
+<iframe src="output/wrocław_map.html" title="Mapa: Wrocław"></iframe>
+<iframe src="output/kraków_map.html" title="Mapa: Kraków"></iframe>
+
+    </div>
+</body>
+</html>
