@@ -8,9 +8,9 @@ from geopy.distance import geodesic
 import html_template as htm
 
 # 1. Wczytaj dane z folderu data
-rent_data = pd.read_csv('data/apartments_rent_pl_2023_11.csv')
+rent_data = pd.read_csv('../data/apartments_rent_pl_2023_11.csv')
 
-job_offers = json.load(open('data/justjoinit-2023-09-25.json'))
+job_offers = json.load(open('../data/justjoinit-2023-09-25.json'))
 
 # 2. Wyfiltruj dane dla miast: Warsaw, Katowice, Wroclaw, Krakow
 cities = ["warszawa", "warsaw", "katowice", "wrocław",
@@ -94,7 +94,7 @@ def generate_city_map(city_name, city_coords, rent_gdf,
 
     folium.LayerControl(collapsed=False).add_to(city_map)
 
-    file_name = f"output/{city_name.lower()}_map.html"
+    file_name = f"../output/{city_name.lower()}_map.html"
     city_map.save(file_name)
     return file_name
 
@@ -122,5 +122,5 @@ for city_name, map_file in map_files:
 final_html = html_content.format(map_sections=map_sections)
 
 # Zapis do pliku HTML
-with open("miasta_mapy.html", "w", encoding="utf-8") as f:
+with open("../output/miasta_mapy.html", "w", encoding="utf-8") as f:
     f.write(final_html)
