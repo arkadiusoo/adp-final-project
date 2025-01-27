@@ -12,6 +12,8 @@ rent_data = pd.read_csv('../data/apartments_rent_pl_2023_11.csv')
 
 job_offers = json.load(open('../data/justjoinit-2023-09-25.json'))
 
+zabka_stores = pd.read_csv('../data/zabka_shops.csv')
+
 # 2. Wyfiltruj dane dla miast: Warsaw, Katowice, Wroclaw, Krakow
 cities = ["warszawa", "warsaw", "katowice", "wrocław",
           "wroclaw", "kraków", "krakow"]
@@ -24,6 +26,8 @@ for offer in job_offers:
     if offer.get('city', '').lower() in cities:
         filtered_job_offers.append(offer)
 
+filtered_zabka_stores = zabka_stores[zabka_stores['city'].str.lower().
+isin(cities)]
 # 3. Przekonwertuj dane na GeoDataFrame
 # oraz przeprowadź projekcję CRS na EPSG:4326
 rent_gdf = gpd.GeoDataFrame(
@@ -36,6 +40,13 @@ job_gdf = gpd.GeoDataFrame(
     filtered_job_offers,
     geometry=[Point(offer['longitude'], offer['latitude'])
               for offer in filtered_job_offers],
+    crs="EPSG:4326"
+)
+
+zabka_gdf = gpd.GeoDataFrame(
+    filtered_zabka_stores,
+    geometry=gpd.points_from_xy(filtered_zabka_stores['lng'],
+                                filtered_zabka_stores['lat']),
     crs="EPSG:4326"
 )
 
@@ -89,9 +100,21 @@ def generate_city_map(city_name, city_coords, rent_gdf,
                 f"<b>Miasto:</b> {city_name}<br>"
                 f"<b>Stanowisko:</b> {row['title']}<br>"
             ),
-            icon=folium.Icon(color="green", icon="briefcase", prefix="fa"),
+            icon=folium.Icon(color="beige", icon="briefcase", prefix="fa"),
         ).add_to(job_markers)
 
+    zabka_filtered = filter_data_within_city(zabka_gdf, city_coords,
+                                             radius_km)
+    zabka_markers = MarkerCluster(name="Sklepy Żabka").add_to(city_map)
+    for row in zabka_filtered:
+        folium.Marker(
+            location=[row.geometry.y, row.geometry.x],
+            popup=(
+                "Żabka<br>"
+                f"<b>Ulica:</b> {row['address']}<br>"
+            ),
+            icon=folium.Icon(color="green", icon="frog", prefix="fa"),
+        ).add_to(zabka_markers)
     folium.LayerControl(collapsed=False).add_to(city_map)
 
     file_name = f"../output/{city_name.lower()}_map.html"
