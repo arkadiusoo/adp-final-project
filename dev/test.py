@@ -8,7 +8,18 @@ from shapely.ops import transform
 import pyproj
 import contextily as ctx
 import matplotlib.pyplot as plt
+from geopy.distance import geodesic
 
+# Funkcja do filtrowania punktów na podstawie odległości od miasta
+def filter_data_within_city(data_gdf, city_coords, radius_km=20):
+    filtered_data = []
+    for _, row in data_gdf.iterrows():
+        point_coords = (row.geometry.y, row.geometry.x)
+        if geodesic(point_coords, city_coords).km <= radius_km:
+            filtered_data.append(row)
+    return gpd.GeoDataFrame(filtered_data, crs=data_gdf.crs)
+
+# Wczytanie danych
 job_offers = json.load(open('../data/justjoinit-2023-09-25.json'))
 
 filtered_job_offers = []
@@ -52,31 +63,16 @@ for index, row in job_gdf.iterrows():
 # Tworzenie GeoDataFrame
 df['geometry'] = df.apply(lambda row: Point(row['longitude'], row['latitude']), axis=1)
 new_job_gdf = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
-new_job_gdf = new_job_gdf.to_crs(epsg=3857)
 
-# Tworzenie bufora (20 km) wokół miast
-def city_point(city_coords):
-    return Point(city_coords[1], city_coords[0])
-
-city_buffers = {
-    city_name: transform(
-        pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True).transform,
-        city_point(city_coords)
-    ).buffer(10000)  # Bufor 20 km w EPSG:3857
-    for city_name, city_coords in city_coordinates.items()
-}
-
-# Filtrowanie punktów w promieniu 20 km od miast
+# Dodatkowe filtrowanie punktów na podstawie odległości od każdego miasta
 filtered_data = []
-for _, row in new_job_gdf.iterrows():
-    point = row.geometry
-    for city_name, buffer in city_buffers.items():
-        if buffer.contains(point):  # Sprawdzanie, czy punkt jest w buforze
-            filtered_data.append(row)
-            break  # Jeśli pasuje do jednego miasta, nie musimy sprawdzać dalej
+for city_name, city_coords in city_coordinates.items():
+    city_gdf = new_job_gdf[new_job_gdf['city'].str.lower() == city_name.lower()]
+    filtered_city_gdf = filter_data_within_city(city_gdf, city_coords, radius_km=20)
+    filtered_data.append(filtered_city_gdf)
 
-# Tworzenie nowego GeoDataFrame z przefiltrowanych danych
-filtered_gdf = gpd.GeoDataFrame(filtered_data, crs="EPSG:3857")
+# Łączenie przefiltrowanych danych
+filtered_gdf = gpd.GeoDataFrame(pd.concat(filtered_data, ignore_index=True), crs="EPSG:4326")
 
 # Tworzenie kategorii wynagrodzeń
 filtered_gdf['salary_range'] = pd.qcut(filtered_gdf['salaryForMap'], 5)
@@ -85,7 +81,7 @@ filtered_gdf['salary_range_label'] = pd.qcut(
     labels=[f"{int(interval.left)} - {int(interval.right)} PLN" for interval in filtered_gdf['salary_range'].cat.categories]
 )
 
-# Wizualizacja map
+# Tworzenie mapy
 fig, axs = plt.subplots(2, 2, figsize=(14, 14))
 axs = axs.flatten()
 
